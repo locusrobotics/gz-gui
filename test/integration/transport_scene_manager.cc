@@ -48,7 +48,7 @@ using namespace gz;
 using namespace gui;
 
 /////////////////////////////////////////////////
-TEST(TransportSceneManagerTest, GZ_UTILS_TEST_ENABLED_ONLY_ON_LINUX(Load))
+TEST(TransportSceneManagerTest, GZ_UTILS_TEST_DISABLED_ON_WIN32(Load))
 {
   common::Console::SetVerbosity(4);
 
@@ -82,7 +82,7 @@ TEST(TransportSceneManagerTest, GZ_UTILS_TEST_ENABLED_ONLY_ON_LINUX(Load))
 }
 
 /////////////////////////////////////////////////
-TEST(TransportSceneManagerTest, GZ_UTILS_TEST_ENABLED_ONLY_ON_LINUX(Config))
+TEST(TransportSceneManagerTest, GZ_UTILS_TEST_DISABLED_ON_WIN32(Config))
 {
   bool sceneRequested{false};
   std::function<bool(msgs::Scene &)> sceneService =

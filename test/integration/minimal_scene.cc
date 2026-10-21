@@ -44,7 +44,7 @@ using namespace gz;
 using namespace gui;
 
 /////////////////////////////////////////////////
-TEST(MinimalSceneTest, GZ_UTILS_TEST_ENABLED_ONLY_ON_LINUX(Load))
+TEST(MinimalSceneTest, GZ_UTILS_TEST_DISABLED_ON_WIN32(Load))
 {
   common::Console::SetVerbosity(4);
 
@@ -71,7 +71,7 @@ TEST(MinimalSceneTest, GZ_UTILS_TEST_ENABLED_ONLY_ON_LINUX(Load))
 }
 
 /////////////////////////////////////////////////
-TEST(MinimalSceneTest, GZ_UTILS_TEST_ENABLED_ONLY_ON_LINUX(Config))
+TEST(MinimalSceneTest, GZ_UTILS_TEST_DISABLED_ON_WIN32(Config))
 {
   common::Console::SetVerbosity(4);
 
