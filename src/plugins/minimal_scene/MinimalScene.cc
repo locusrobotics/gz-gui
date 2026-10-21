@@ -234,6 +234,10 @@ class gz::gui::plugins::RenderWindowItem::Implementation
 
   /// \brief List of our QT connections.
   public: QList<QMetaObject::Connection> connections;
+
+  /// \brief Wheel rotation received but not yet turned into scroll steps,
+  /// in Qt's angle delta units (eighths of a degree)
+  public: int wheelAngleRemainder{0};
 };
 
 /// \brief Private data class for MinimalScene
@@ -1752,7 +1756,36 @@ void RenderWindowItem::wheelEvent(QWheelEvent *_e)
 {
   this->forceActiveFocus();
 
+  // Trackpads and smooth-scrolling mice send many small deltas per gesture
+  // (plus momentum events), and convert() turns every event into a full
+  // scroll step, which made zooming far too sensitive. Accumulate the
+  // rotation and emit one step per notch of a standard mouse wheel (120).
+  // Those devices report a scroll phase or pixel delta; for them a step
+  // takes a third as much movement, since a swipe covers less angle than
+  // turning a wheel and zooming felt too slow otherwise.
+  const bool highResolution = _e->phase() != Qt::NoScrollPhase ||
+      !_e->pixelDelta().isNull();
+  const int kAnglePerStep = highResolution ? 40 : 120;
+
+  const int delta = _e->angleDelta().y();
+  if (delta == 0)
+    return;
+
+  auto &remainder = this->dataPtr->wheelAngleRemainder;
+  // Respond immediately when the scroll direction reverses
+  if ((delta > 0) != (remainder > 0))
+    remainder = 0;
+  remainder += delta;
+
+  const int steps = remainder / kAnglePerStep;
+  if (steps == 0)
+    return;
+  remainder -= steps * kAnglePerStep;
+
   this->dataPtr->mouseEvent = convert(*_e);
+  toDevicePixels(this, this->dataPtr->mouseEvent);
+  // Positive angle delta scrolls up, which zooms in
+  this->dataPtr->mouseEvent.SetScroll(-steps, -steps);
   this->dataPtr->renderThread->gzRenderer.NewMouseEvent(
     this->dataPtr->mouseEvent);
 }
