@@ -57,6 +57,9 @@ namespace plugins
     public: id<MTLTexture> metalTexture = nil;
     public: id<MTLTexture> newMetalTexture = nil;
     public: id<MTLTexture> viewTexture = nil;
+    /// \brief Ogre texture currently wrapped by `texture`
+    public: id<MTLTexture> sourceTexture = nil;
+    public: QSize sourceSize {0, 0};
     public: QSize size {0, 0};
     public: QSize newSize {0, 0};
     public: QMutex mutex;
@@ -65,6 +68,17 @@ namespace plugins
 
     public: void CreateTexture(id<MTLTexture> _id, QSize _size)
     {
+      // Ogre renders every frame into the same MTLTexture until the camera
+      // is resized, so reuse the wrapper instead of rebuilding the texture
+      // view and QSGTexture each frame.
+      if (this->texture && _id && _id == this->sourceTexture &&
+          _size == this->sourceSize)
+      {
+        return;
+      }
+      this->sourceTexture = _id;
+      this->sourceSize = _size;
+
       delete this->texture;
       this->texture = nullptr;
 
