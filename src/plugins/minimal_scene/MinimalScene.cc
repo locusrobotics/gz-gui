@@ -25,6 +25,7 @@
 #include "MinimalSceneRhiVulkan.hh"
 
 #include <algorithm>
+#include <cmath>
 #include <list>
 #include <map>
 #include <sstream>
@@ -584,6 +585,59 @@ rendering::CameraPtr GzRenderer::Camera()
   return this->dataPtr->camera;
 }
 
+namespace {
+/////////////////////////////////////////////////
+/// \brief Ratio between device pixels and Qt's logical pixels for the
+/// window showing an item, e.g. 2 on a Retina display.
+/// \param[in] _item Item to query
+/// \return Device pixel ratio, or 1 if the item has no window yet
+double devicePixelRatio(const QQuickItem *_item)
+{
+  if (nullptr == _item || nullptr == _item->window())
+    return 1.0;
+  return _item->window()->effectiveDevicePixelRatio();
+}
+
+/////////////////////////////////////////////////
+/// \brief Size of the render texture for an item, in device pixels, so the
+/// scene is rendered at the display's native resolution instead of being
+/// upscaled on high-DPI screens.
+/// \param[in] _item Item showing the rendered scene
+/// \return Texture size, at least 1x1
+QSize deviceTextureSize(const QQuickItem *_item)
+{
+  const double ratio = devicePixelRatio(_item);
+  return QSize(
+      static_cast<int>(std::max(std::round(_item->width() * ratio), 1.0)),
+      static_cast<int>(std::max(std::round(_item->height() * ratio), 1.0)));
+}
+
+/////////////////////////////////////////////////
+/// \brief Convert a position in an item's logical pixels to the device
+/// pixels of its render texture, which is what the camera works in.
+/// \param[in] _item Item showing the rendered scene
+/// \param[in] _pos Position in logical pixels
+/// \return Position in device pixels
+math::Vector2i toDevicePixels(const QQuickItem *_item,
+    const math::Vector2i &_pos)
+{
+  const double ratio = devicePixelRatio(_item);
+  return math::Vector2i(
+      static_cast<int>(std::round(_pos.X() * ratio)),
+      static_cast<int>(std::round(_pos.Y() * ratio)));
+}
+
+/////////////////////////////////////////////////
+/// \brief Convert a mouse event's position to device pixels
+/// \param[in] _item Item showing the rendered scene
+/// \param[in, out] _event Event to convert
+void toDevicePixels(const QQuickItem *_item, common::MouseEvent &_event)
+{
+  const auto pos = toDevicePixels(_item, _event.Pos());
+  _event.SetPos(pos.X(), pos.Y());
+}
+}  // namespace
+
 #if GZ_GUI_HAVE_VULKAN
 namespace {
 /////////////////////////////////////////////////
@@ -957,8 +1011,7 @@ void RenderThread::SizeChanged()
   if (item->width() <= 0 || item->height() <= 0)
     return;
 
-  this->gzRenderer.textureSize =
-    QSize(static_cast<int>(item->width()), static_cast<int>(item->height()));
+  this->gzRenderer.textureSize = deviceTextureSize(item);
   this->gzRenderer.textureDirty = true;
 }
 
@@ -1168,8 +1221,7 @@ void RenderWindowItem::Ready()
   this->dataPtr->renderThread->moveToThread(this->dataPtr->renderThread);
 
   this->dataPtr->renderThread->gzRenderer.textureSize =
-    QSize(static_cast<int>(std::max({ this->width(), 1.0 })),
-          static_cast<int>(std::max({ this->height(), 1.0 })));
+      deviceTextureSize(this);
 
   this->connect(this, &QQuickItem::widthChanged,
       this->dataPtr->renderThread, &RenderThread::SizeChanged);
@@ -1614,7 +1666,8 @@ void MinimalScene::LoadConfig(const tinyxml2::XMLElement *_pluginElem)
 /////////////////////////////////////////////////
 void RenderWindowItem::OnHovered(const gz::math::Vector2i &_hoverPos)
 {
-  this->dataPtr->renderThread->gzRenderer.NewHoverEvent(_hoverPos);
+  this->dataPtr->renderThread->gzRenderer.NewHoverEvent(
+      toDevicePixels(this, _hoverPos));
 }
 
 /////////////////////////////////////////////////
@@ -1622,7 +1675,7 @@ void RenderWindowItem::OnDropped(const QString &_drop,
     const gz::math::Vector2i &_dropPos)
 {
   this->dataPtr->renderThread->gzRenderer.NewDropEvent(
-    _drop.toStdString(), _dropPos);
+    _drop.toStdString(), toDevicePixels(this, _dropPos));
 }
 
 /////////////////////////////////////////////////
@@ -1635,6 +1688,7 @@ void RenderWindowItem::SetErrorCb(std::function<void(const QString&)> _cb)
 void RenderWindowItem::mousePressEvent(QMouseEvent *_e)
 {
   this->dataPtr->mouseEvent = convert(*_e);
+  toDevicePixels(this, this->dataPtr->mouseEvent);
   this->dataPtr->mouseEvent.SetPressPos(this->dataPtr->mouseEvent.Pos());
 
   this->dataPtr->renderThread->gzRenderer.NewMouseEvent(
@@ -1669,6 +1723,7 @@ void RenderWindowItem::mouseReleaseEvent(QMouseEvent *_e)
   auto dragging = this->dataPtr->mouseEvent.Dragging();
 
   this->dataPtr->mouseEvent = convert(*_e);
+  toDevicePixels(this, this->dataPtr->mouseEvent);
   this->dataPtr->mouseEvent.SetPressPos(pressPos);
   this->dataPtr->mouseEvent.SetDragging(dragging);
 
@@ -1683,6 +1738,7 @@ void RenderWindowItem::mouseMoveEvent(QMouseEvent *_e)
   auto pressPos = this->dataPtr->mouseEvent.PressPos();
 
   this->dataPtr->mouseEvent = convert(*_e);
+  toDevicePixels(this, this->dataPtr->mouseEvent);
 
   if (this->dataPtr->mouseEvent.Dragging())
     this->dataPtr->mouseEvent.SetPressPos(pressPos);
